@@ -1,0 +1,14 @@
+log_azure_agent: <ADD_AGENT_COMMAND>
+casb_host: my.skyfence.com
+application_directory: /var/azure_casb
+logs_directory: /var/azure_casb/logs
+# the format for start date_time must be YYYY-MM-DD HH:MM:SS
+logs_starting_date: 2019-11-01 00:00:00
+logs_filter_parameters:
+  include:
+    device_product: Cloud Service Monitoring,SaaS Security Gateway,CASB Admin audit log,CASB Incidents
+    action: act=Block,act="Block",act=Monitor,act="Monitor",act=MONITOR
+  exclude:
+    reason: reason=download
+include_admin_audit_logs: true
+SIEM_tool_outputs_location: /var/azure_casb/SIEM_TOOL_OUTPUTS
