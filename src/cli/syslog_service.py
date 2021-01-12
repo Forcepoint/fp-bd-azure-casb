@@ -4,9 +4,13 @@
 
 import yaml
 import glob
+import os
 from os import path, system
 from datetime import datetime
 from src.lib.syslog_filter import SyslogFilter
+import shutil
+from time import sleep
+from multiprocessing import Process
 
 SYSLOG_CONFIG_LOCATION = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 
@@ -16,6 +20,7 @@ class SyslogService:
         self._args = None
         self._parser = parser
         self._settings = None
+        self._cmd = ""
 
     def __call__(self, args):
         self._args = args
@@ -89,11 +94,55 @@ class SyslogService:
         if len(siem_tool_directory) > 1:
             self._parser.error(f"multiple SIEM tool directory exist under {self._settings['application_directory']}")
         siem_tool_directory = siem_tool_directory[0]
-        cmd = f'cd {siem_tool_directory};./SIEMClient.sh --credentials.file credentials_file ' \
-              f'--output.dir {self._settings["SIEM_tool_outputs_location"]} ' \
-              f' --host {self._settings["casb_host"]} --port 443 ' \
-              f'  truststorePath={self._settings["application_directory"]}/truststore' \
-              f' exportSyslog=true syslogHost=127.0.0.1 syslogFacility=local2 cefCompliance=true'
+        self._cmd = f'cd {siem_tool_directory};./SIEMClient.sh --credentials.file credentials_file ' \
+                    f'--output.dir {self._settings["application_directory"]}/SIEM_TOOL_OUTPUTS' \
+                    f' --host {self._settings["casb_host"]} --port 443 ' \
+                    f'  truststorePath={self._settings["application_directory"]}/truststore'
         if self._settings["include_admin_audit_logs"] is True:
-            cmd = cmd + " --admin.audit"
-        system(cmd)
+            self._cmd = self._cmd + " --admin.audit"
+        logs_location = f"{self._settings['application_directory']}/SIEM_TOOL_OUTPUTS"
+        buffer_location = f"{self._settings['application_directory']}/LOGS_BUFFER"
+        auto_remove = self._settings["remove_logs_after_send"]
+        download_process = Process(target=self._download_logs)
+        move_process = Process(target=self._move_cef, args=(logs_location, buffer_location))
+        send_process = Process(target=self._send_logs, args=(buffer_location, auto_remove))
+        download_process.start()
+        move_process.start()
+        send_process.start()
+        try:
+            while True:
+                sleep(120)
+        except KeyboardInterrupt:
+            download_process.terminate()
+            move_process.terminate()
+            send_process.terminate()
+            exit(0)
+
+    def _download_logs(self):
+        while True:
+            system(self._cmd)
+            sleep(60)
+
+    def _move_cef(self, source, destination):
+        while True:
+            logs = glob.glob(f"{source}/**/*.cef", recursive=True)
+            for i in logs:
+                shutil.move(i, f"{destination}/{i.replace('/', '_')}")
+            sleep(15)
+
+    def _send_logs(self, source, auto_remove):
+        while True:
+            logs = glob.glob(f"{source}/*.cef")
+            for log in logs:
+                with open(log, 'r') as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        if len(line) > 1:
+                            line = line.replace("'", "")
+                            cmd = f"logger -n localhost -P 514 -T `echo '{line.strip()}' | sed 's/\\=/\=/g'`"
+                            cmd = cmd.replace('"', "")
+                            system(cmd)
+                            sleep(0.01)
+                if auto_remove:
+                    os.remove(log)
+            sleep(20)

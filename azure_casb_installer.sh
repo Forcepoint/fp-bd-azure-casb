@@ -91,6 +91,7 @@ if [ ! -f "$TRUSTSTORE_FILE" ]; then
     exit 1
 fi
 cp -r ./* "$APPLICATION_DIRECTORY"
+mkdir "$APPLICATION_DIRECTORY"/LOGS_BUFFER
 cd "$APPLICATION_DIRECTORY" || exist 1
 unzip "$SIEM_FILE"
 rm "$SIEM_FILE"
@@ -108,7 +109,6 @@ echo "Creating systemd services"
 python3 "$DIR"/cli_controller.py service -c "$SETTINGS_FILE"
 echo "Enabling systemd services"
 systemctl enable azure_casb.service
-systemctl enable azure_casb_timer.service
 
 if [ $java_version == 8 ]; then
   sudo update-java-alternatives --jre-headless --jre --set java-1.8.0-openjdk-amd64

@@ -73,20 +73,3 @@ WantedBy=multi-user.target
             f.write(service)
         system("chmod 644 {}".format(service_path))
         system("systemctl daemon-reload")
-        timer_service = """
-[Unit]
-Description= run timer service for azure_casb.service
-Requires=azure_casb.service
-After=azure_casb.service
-
-[Service]
-ExecStart={}/scripts/timer.sh
-
-[Install]
-WantedBy=multi-user.target
-""".format(self._settings["application_directory"])
-        service_path = "/etc/systemd/system/{}.service".format("azure_casb_timer")
-        with open(service_path, "w") as f:
-            f.write(timer_service)
-        system("chmod 644 {}".format(service_path))
-        system("systemctl daemon-reload")
